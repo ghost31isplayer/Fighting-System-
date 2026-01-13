@@ -1,1 +1,304 @@
-#There was no rumors. Bitch
+import random
+
+# =============================
+# CURRENCY SYSTEM
+# =============================
+
+class Wallet:
+    def __init__(self, gold=0, silver=0, copper=0):
+        self.gold = gold
+        self.silver = silver
+        self.copper = copper
+        self.normalize()
+
+    def normalize(self):
+        if self.copper >= 20:
+            self.silver += self.copper // 20
+            self.copper %= 20
+
+        if self.silver >= 20:
+            self.gold += self.silver // 20
+            self.silver %= 20
+
+    def total_copper(self):
+        return self.copper + (self.silver * 20) + (self.gold * 400)
+
+    def can_afford(self, copper_cost):
+        return self.total_copper() >= copper_cost
+
+    def spend_copper(self, copper_cost):
+        if not self.can_afford(copper_cost):
+            return False
+
+        total = self.total_copper() - copper_cost
+        self.gold = total // 400
+        total %= 400
+        self.silver = total // 20
+        self.copper = total % 20
+        return True
+
+    def display(self):
+        return f"{self.gold}g {self.silver}s {self.copper}c"
+
+
+# =============================
+# DRUNKENNESS SYSTEM
+# =============================
+
+DRINK_COST = 8        # copper
+DRINK_LIMIT = 3       # drinks before drunk
+
+
+class Drunkenness:
+    def __init__(self):
+        self.drinks = 0
+
+    def drink(self):
+        self.drinks += 1
+
+    def is_drunk(self):
+        return self.drinks >= DRINK_LIMIT
+
+    def status(self):
+        if self.drinks == 0:
+            return "Sober"
+        elif self.drinks < DRINK_LIMIT:
+            return "Buzzed"
+        else:
+            return "Drunk"
+
+
+# =============================
+# RUMORS
+# =============================
+
+RUMORS = {
+    1: "The locals whisper about livestock vanishing east of the river. No blood. Just gone.",
+    2: "The war’s bleeding coin. Lords hire sellswords quietly now.",
+    3: "Bandits haunt the north road. Even guards avoid it at night.",
+    4: "A noble house seeks blades — discreet work, good pay.",
+    5: "Old ruins near the hills were disturbed. Something woke up.",
+    6: "A plague ship docked two nights ago. Harbor master’s keeping quiet."
+}
+
+
+# =============================
+# RIDDLES (GAME OF WIT)
+# =============================
+
+RIDDLES = [
+    {
+        "question": "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?",
+        "choices": ["A ghost", "An echo", "A whisper", "A song"],
+        "correct": 2
+    },
+    {
+        "question": "The more you take, the more you leave behind. What am I?",
+        "choices": ["Time", "Footsteps", "Memories", "Breath"],
+        "correct": 2
+    },
+    {
+        "question": "I have cities, but no houses. Rivers, but no water. What am I?",
+        "choices": ["A dream", "A map", "A painting", "A lie"],
+        "correct": 2
+    },
+    {
+        "question": "What walks on four legs in the morning, two at noon, and three in the evening?",
+        "choices": ["A beast", "A king", "A man", "Time"],
+        "correct": 3
+    },
+    {
+        "question": "I’m tall when I’m young, and short when I’m old. What am I?",
+        "choices": ["A tree", "A candle", "A mountain", "A shadow"],
+        "correct": 2
+    },
+    {
+        "question": "What has a heart that doesn’t beat?",
+        "choices": ["A corpse", "A mountain", "An artichoke", "A stone"],
+        "correct": 3
+    },
+    {
+        "question": "What can travel around the world while staying in one place?",
+        "choices": ["A coin", "A shadow", "A stamp", "A rumor"],
+        "correct": 3
+    },
+    {
+        "question": "The poor have it. The rich need it. If you eat it, you die. What is it?",
+        "choices": ["Poison", "Gold", "Nothing", "Silence"],
+        "correct": 3
+    }
+]
+
+
+
+# =============================
+# TAVERN FUNCTIONS
+# =============================
+
+def tavern_menu():
+    print("\n--- Tavern ---")
+    print("1. Ask about rumors")
+    print("2. Look around")
+    print("3. Game of wit (riddle for a free drink)")
+    print("0. Leave tavern")
+
+
+def rumor_menu():
+    print("\n--- Rumors ---")
+    print("1. What are the locals saying?")
+    print("2. Heard anything about the war?")
+    print("3. Any dangers as of late?")
+    print("4. Any work going around?")
+    print("5. Anything strange happening?")
+    print("6. Any dark rumors?")
+    print("0. Back")
+
+
+def try_drink(drunkenness):
+    if drunkenness.is_drunk():
+        print("\nThe barkeep folds his arms.")
+        print("‘That’s enough for you. Come back tomorrow.’")
+        return False
+    drunkenness.drink()
+    return True
+
+
+def look_around(drunkenness):
+    print("\nYou take a moment to look around the tavern...")
+
+    if drunkenness.is_drunk():
+        print("\nThe room sways and stretches.")
+        print("Faces blur together. Laughter echoes too loud.")
+        print("You swear the walls are breathing.")
+        print("Whatever was worth noticing slips away.")
+        return
+
+    if drunkenness.drinks == 0:
+        print("\nThe tavern is lively but watchful.")
+        print("Mercenaries nurse cheap ale in the corners.")
+        print("A hooded figure sits alone near the hearth.")
+        print("The barkeep polishes a glass, listening more than he speaks.")
+    else:
+        print("\nThe tavern feels warmer than before.")
+        print("Voices are louder, smiles a little too wide.")
+        print("You catch fragments of conversation, but nothing clear.")
+
+
+def ask_rumor(wallet, drunkenness):
+    rumor_menu()
+    choice = input("\nChoose a rumor: ")
+
+    if choice == "0":
+        return
+
+    if not choice.isdigit():
+        print("\n‘Speak clearly.’")
+        return
+
+    choice = int(choice)
+
+    if choice not in RUMORS:
+        print("\n‘I don’t know anything about that.’")
+        return
+
+    if drunkenness.is_drunk():
+        print("\nYou’re too drunk to get anything useful.")
+        return
+
+    print(f"\n‘Rumors cost a drink. {DRINK_COST} copper.’")
+    print(f"You have: {wallet.display()}")
+
+    buy = input("Buy a drink? (y/n): ").lower()
+
+    if buy != "y":
+        print("\n‘Then no rumor.’")
+        return
+
+    if not wallet.spend_copper(DRINK_COST):
+        print("\n‘You’re short on coin.’")
+        return
+
+    if not try_drink(drunkenness):
+        return
+
+    print("\nThe barkeep leans closer.")
+    print(RUMORS[choice])
+    print(f"\nRemaining coin: {wallet.display()}")
+
+
+def game_of_wit(drunkenness):
+    if drunkenness.is_drunk():
+        print("\nYou can barely focus. The barkeep waves you off.")
+        return
+
+    print("\nThe barkeep grins.")
+    print("‘Game of wit. One question. Choose wisely.’")
+
+    riddle = random.choice(RIDDLES)
+
+    print("\nRiddle:")
+    print(riddle["question"])
+
+    for i, choice in enumerate(riddle["choices"], start=1):
+        print(f"{i}. {choice}")
+
+    answer = input("\nYour answer (1-4): ")
+
+    if not answer.isdigit():
+        print("\nThe barkeep sighs. ‘That’s not even a number.’")
+        return
+
+    if int(answer) == riddle["correct"]:
+        print("\nThe barkeep laughs and pours a drink.")
+        if try_drink(drunkenness):
+            print("‘On the house.’")
+    else:
+        print("\nThe barkeep shakes his head.")
+        print("‘Wrong. No drink for you.’")
+
+
+def ask_barkeep(wallet, drunkenness):
+    tavern_menu()
+    choice = input("\nChoose an option: ")
+
+    if choice == "0":
+        print("\nYou leave the tavern.")
+        return False
+
+    if not choice.isdigit():
+        print("\nThe barkeep grunts. ‘Speak clearly.’")
+        return True
+
+    choice = int(choice)
+
+    if choice == 1:
+        ask_rumor(wallet, drunkenness)
+    elif choice == 2:
+        look_around(drunkenness)
+    elif choice == 3:
+        game_of_wit(drunkenness)
+    else:
+        print("\nThe barkeep stares at you.")
+
+    return True
+
+
+# =============================
+# MAIN LOOP
+# =============================
+
+def run_tavern():
+    wallet = Wallet(gold=0, silver=2, copper=5)
+    drunkenness = Drunkenness()
+
+    print("You enter a smoke-filled tavern.")
+    print(f"Your coin: {wallet.display()}")
+
+    running = True
+    while running:
+        print(f"\nStatus: {drunkenness.status()}")
+        running = ask_barkeep(wallet, drunkenness)
+
+
+if __name__ == "__main__":
+    run_tavern()
