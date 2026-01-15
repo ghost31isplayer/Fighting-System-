@@ -3,6 +3,74 @@
 # ==========================================
 
 import random
+ 
+# ==========================================
+# Briefing
+# ==========================================
+
+def show_briefing():
+    print("""
+====================================================
+ IMPERIAL BRIEFING – EYES ONLY
+====================================================
+
+SITUATION:
+You are deployed aboard a derelict Space Hulk.
+Hostile lifeforms detected: GENESTEALERS.
+
+MISSION:
+Advance through the Hulk.
+Eliminate hostile contacts.
+Reach the exit.
+
+----------------------------------------------------
+RULES OF ENGAGEMENT
+----------------------------------------------------
+• Turn-based operations.
+• Actions consume Action Points (AP).
+• When AP is expended, hostile units act.
+• Contact with enemy results in mission failure.
+• Visibility is limited. Unseen areas are unknown.
+• Doors may be opened by either side.
+
+----------------------------------------------------
+TACTICAL ANALYSIS (METT-TC)
+----------------------------------------------------
+MISSION:
+Reach the exit. Neutralize threats.
+
+ENEMY:
+Genestealers.
+Close-range ambush predators.
+Lethal on contact.
+
+TERRAIN:
+Confined corridors.
+Limited visibility.
+Restricted movement.
+Doors and corners dominate engagements.
+
+TROOPS:
+Single Space Marine.
+Limited action economy.
+Sustained close combat expected.
+
+TIME:
+Turn-based execution.
+Enemy phase follows player turn.
+
+----------------------------------------------------
+END STATE
+----------------------------------------------------
+• SUCCESS: Reach the exit.
+• FAILURE: Enemy reaches your position.
+
+----------------------------------------------------
+Press ENTER to begin mission.
+----------------------------------------------------
+""")
+    input()
+
 
 # ==========================================
 # CONSTANTS
@@ -29,14 +97,16 @@ OPEN_DOOR_COST = 1
 MELEE_AP_COST = 1
 RANGED_AP_COST = 2
 
-MAP_WIDTH = 40
-MAP_HEIGHT = 20
+MAP_WIDTH = 80
+MAP_HEIGHT = 40
 VISION_RADIUS = 5  # how far the player can see
 
 
 # ==========================================
 # TROOPER SELECTION
 # ==========================================
+
+
 
 troopers = {
     "1": {"name": "Assault Marine", "max_ap": 6, "melee": 1, "range": 3},
@@ -54,6 +124,8 @@ for k, t in troopers.items():
 choice = input("> ")
 player = troopers.get(choice, troopers["1"])
 input(f"\n{player['name']} locked and loaded. Press ENTER...")
+
+show_briefing()
 
 # ==========================================
 # GAME STATE
@@ -370,6 +442,36 @@ def flame_attack():
     else:
         message_log.append("Flamer hits nothing.")
     player_ap -= FLAME_COST
+
+def overwatch_attack(player, enemy_positions, game_map):
+    """Check all enemies for entering overwatch zone"""
+    if not player.get("overwatch"):
+        return
+
+    px, py = player['pos']
+    facing = player['facing']
+
+    # directions to check (3 forward + diagonals)
+    if facing == "N":
+        tiles = [(px, py-1), (px-1, py-1), (px+1, py-1)]
+    elif facing == "S":
+        tiles = [(px, py+1), (px-1, py+1), (px+1, py+1)]
+    elif facing == "E":
+        tiles = [(px+1, py), (px+1, py-1), (px+1, py+1)]
+    elif facing == "W":
+        tiles = [(px-1, py), (px-1, py-1), (px-1, py+1)]
+
+    # check for enemies in tiles
+    for enemy in enemy_positions:
+        ex, ey = enemy['pos']
+        if (ex, ey) in tiles:
+            print(f"Overwatch! {enemy['name']} is fired upon!")
+            enemy['hp'] -= player.get('range', 1)  # damage formula
+            if enemy['hp'] <= 0:
+                print(f"{enemy['name']} is destroyed!")
+                enemy_positions.remove(enemy)
+
+
 
 # ==========================================
 # GENESTEALER AI
