@@ -42,11 +42,9 @@ class Wallet:
 # =====================================================
 # DRUNKENNESS SYSTEM
 # =====================================================
-
-DRINK_COST = 8
-DRINK_LIMIT = 3
-
 class Drunkenness:
+    DRINK_LIMIT = 3
+
     def __init__(self):
         self.drinks = 0
 
@@ -54,15 +52,18 @@ class Drunkenness:
         self.drinks += 1
 
     def is_drunk(self):
-        return self.drinks >= DRINK_LIMIT
+        return self.drinks >= self.DRINK_LIMIT
 
     def status(self):
         if self.drinks == 0:
             return "Sober"
-        elif self.drinks < DRINK_LIMIT:
+        elif self.drinks < self.DRINK_LIMIT:
             return "Buzzed"
         else:
             return "Drunk"
+
+    def display(self):
+        return f"{self.status()} ({self.drinks}/{self.DRINK_LIMIT})"
 
 
 # =====================================================
@@ -77,6 +78,34 @@ RUMORS = {
     5: "Old ruins near the hills were disturbed. Something woke up.",
     6: "A plague ship docked two nights ago. Harbor master’s keeping quiet."
 }
+
+
+# =====================================================
+# LOOK AROUND FLAVOR TEXT
+# =====================================================
+
+LOOK_AROUND_SOBER = [
+    "Mercenaries brood in shadowed corners, hands never far from steel.",
+    "A hooded figure watches the room from beneath a low cowl.",
+    "Tankards clatter as tired travelers nurse cheap ale.",
+    "A bard plucks quietly at a lute, watching for coin more than applause."
+]
+
+LOOK_AROUND_BUZZED = [
+    "Laughter comes easier now. The room feels warmer.",
+    "Faces blur at the edges as voices rise and fall together.",
+    "Someone claps you on the shoulder, already forgetting why.",
+    "The firelight dances just a little too much."
+]
+
+LOOK_AROUND_DRUNK = [
+    "The room sways like a ship at sea.",
+    "Words smear together into meaningless noise.",
+    "You’re not sure if people are staring or if that’s just your head.",
+    "The floor feels further away than it should be."
+]
+
+
 
 
 # =====================================================
@@ -152,23 +181,10 @@ RIDDLES = [
     }
 ]
 
-# =====================================================
-# DICE REACTIONS
-# =====================================================
 
-DICE_LOSE_RESPONSES = [
-    "The dealer shrugs. ‘Don’t worry. Next roll’s always better.’",
-    "A nearby gambler chuckles. ‘Happens to everyone.’",
-    "The dealer taps the table. ‘Bad luck. Care to try again?’",
-    "‘Dice turn quick,’ the dealer says. ‘Stick around.’"
-]
 
-DICE_WIN_RESPONSES = [
-    "The dealer grins. ‘Care to press your luck?’",
-    "A few coins slide your way. ‘Fortune smiles on you.’",
-    "The dealer leans in. ‘Double down while you’re hot?’",
-    "A gambler nearby mutters, ‘Should’ve stopped while ahead.’"
-]
+
+
 
 # =====================================================
 # MENUS
@@ -180,7 +196,9 @@ def tavern_menu():
     print("2. Look around")
     print("3. Game of wit (riddle for a free drink)")
     print("4. Check the dice corner")
+    print("5. Buy a drink")
     print("0. Leave tavern")
+
 
 
 def rumor_menu():
@@ -192,6 +210,35 @@ def rumor_menu():
     print("5. Anything strange happening?")
     print("6. Any dark rumors?")
     print("0. Back")
+
+
+# =====================================================
+# BUY A DRINK
+# =====================================================
+
+DRINK_COST = 8  # already exists, keep it here if not
+
+def buy_drink(wallet, drunkenness):
+    print("\nYou signal the barkeep.")
+    print(f"‘That’ll be {DRINK_COST} copper.’")
+    print(f"You have: {wallet.display()}")
+
+    if drunkenness.is_drunk():
+        print("The barkeep shakes his head. ‘You’ve had enough.’")
+        return
+
+    if not wallet.can_afford(DRINK_COST):
+        print("You fumble for coin you don’t have.")
+        return
+
+    if input("Buy the drink? (y/n): ").lower() != "y":
+        print("You lower your hand.")
+        return
+
+    wallet.spend_copper(DRINK_COST)
+    drunkenness.drink()
+
+    print("The ale burns going down.")
 
 
 # =====================================================
@@ -207,17 +254,250 @@ def try_drink(drunkenness):
     return True
 
 
-def look_around(drunkenness):
+
+# ------------------------------
+# Turtle race constants
+# ------------------------------
+TURTLE_PROGRESS_LINES = [
+    "{winner} pulls ahead of {loser}.",
+    "{winner} inches forward, shell scraping wood.",
+    "{winner} surges unexpectedly.",
+    "{loser} hesitates. {winner} gains ground.",
+    "{winner} steadies its pace, relentless."
+]
+
+TURTLE_CROWD_REACTIONS = [
+    "The crowd roars.",
+    "Coins clink nervously.",
+    "A sailor shouts encouragement.",
+    "Someone curses loudly.",
+    "Laughter ripples through the ring.",
+    "A merc pounds the table.",
+    "A thug leans in, eyes wide."
+]
+
+TURTLE_COLORS = ["blue", "red", "purple", "orange"]
+
+# ------------------------------
+# Special encounters list
+# ------------------------------
+TAVERN_SPECIAL_ENCOUNTERS = [
+    {
+        "id": "hafthor",
+        "name": "Hafthor the Hungry",
+        "chance": 0.05,
+        "condition": lambda drunkenness: drunkenness.drinks == 0,
+        "intro": "A massive raider squats near the hearth, gnawing on a bone.\n‘Rock. Paper. Steel. Two outta three.’",
+        "type": "rps"
+    },
+    {
+        "id": "kril",
+        "name": "Kril the One-Eyed",
+        "chance": 0.05,
+        "condition": lambda drunkenness: drunkenness.drinks >= 3,
+        "intro": "A one-eyed woman slams a mug beside you.\n‘Drink with me.’",
+        "type": "drinking"
+    },
+    {
+        "id": "strider",
+        "name": "Strider",
+        "chance": 0.09,
+        "condition": lambda drunkenness: True,
+        "intro": "A hooded man sits alone, pipe smoke curling beneath the rafters.\n‘Looking for a bow that doesn’t miss?’",
+        "type": "recruit_intro",
+        "data": {"fee": 30, "recruit": {"name": "Eagle-Eyed Archer", "role": "Archer", "quality": "Solid", "perk": "Eagle Eye"}}
+    },
+    {
+        "id": "butcher",
+        "name": "Butcher",
+        "chance": 0.10,
+        "condition": lambda drunkenness: True,
+        "intro": "A thick-necked man wipes blood from bruised knukles..\n‘Need bodies? I got bodies.’",
+        "type": "bulk_recruit",
+        "data": {"fee_per_man": 10, "max_recruits": 3, "quality": "Cannon Fodder"}
+    },
+    {
+        "id": "turtle_race",
+        "name": "Turtle Racing Ring",
+        "chance": 0.05,
+        "condition": lambda drunkenness: 0 < drunkenness.drinks < drunkenness.DRINK_LIMIT,
+        "intro": "A low circle has formed near the back tables.\nFour turtles crawl slowly across a chalk-marked board.\nCoins clink. Sailors shout.",
+        "type": "turtle_race"
+    }
+]
+
+# ------------------------------
+# Functions for Special Encounter
+# ------------------------------
+
+def handle_special_encounter(encounter, wallet, drunkenness):
+    print(f"\n--- Special Encounter: {encounter['name']} ---")
+    print(encounter["intro"])
+
+    # Dispatch to interaction based on type
+    if encounter["type"] == "rps":
+        play_rps_hafthor()
+
+    elif encounter["type"] == "drinking":
+        drink_with_kril(wallet, drunkenness)
+
+    elif encounter["type"] == "turtle_race":
+        turtle_race(wallet)  # calls separately defined function
+
+    elif encounter["type"] == "recruit_intro":
+        fee = encounter["data"]["fee"]
+        choice = input(f"\nPay {fee} copper to recruit {encounter['data']['recruit']['name']}? (y/n): ").lower()
+        if choice == "y":
+            if wallet.can_afford(fee):
+                wallet.spend_copper(fee)
+                print(f"{encounter['data']['recruit']['name']} joins your party!")
+            else:
+                print("You don't have enough coins.")
+        else:
+            print("You decide not to hire him.")
+
+    elif encounter["type"] == "bulk_recruit":
+        max_recruits = encounter["data"]["max_recruits"]
+        fee_per_man = encounter["data"]["fee_per_man"]
+        print(f"\nYou can hire up to {max_recruits} recruits for {fee_per_man} copper each.")
+        num = input("How many do you want to hire? ")
+        if num.isdigit():
+            num = int(num)
+            total_cost = num * fee_per_man
+            if num <= max_recruits and wallet.can_afford(total_cost):
+                wallet.spend_copper(total_cost)
+                print(f"You hired {num} {encounter['data']['quality']} recruits!")
+            else:
+                print("Cannot hire that many or insufficient funds.")
+        else:
+            print("No one is hired.")
+
+
+def look_around(wallet, drunkenness):
     print("\nYou scan the tavern...")
 
-    if drunkenness.is_drunk():
-        print("The walls sway. Faces melt together. Nothing makes sense.")
+    for encounter in TAVERN_SPECIAL_ENCOUNTERS:
+        if random.random() < encounter["chance"] and encounter["condition"](drunkenness):
+            handle_special_encounter(encounter, wallet, drunkenness)
+            break  # Only trigger one encounter per look-around
+
+
+# ------------------------------
+# Turtle Race Mini-game
+# ------------------------------
+
+def turtle_race(wallet):
+    print("\nFour turtles are lined up for the race. Each wearing a small colored string around their head. You can bet some copper on one of them!")
+    turtles = ["Red", "Blue", "Green", "Orange"]
+    print("Turtles: ", ", ".join(turtles))
+
+    bet_turtle = input("Which turtle do you bet on? (or press Enter to watch for free): ").capitalize()
+    bet_amount = 0
+    if bet_turtle in turtles:
+        bet_input = input("How much copper do you want to bet? ")
+        if bet_input.isdigit():
+            bet_amount = int(bet_input)
+            if not wallet.can_afford(bet_amount):
+                print("You don't have enough coins. You watch for free instead.")
+                bet_amount = 0
+        else:
+            print("Invalid amount. You watch for free instead.")
+
+    print("\nThe race begins!")
+    winner = random.choice(turtles)
+
+    print("The turtles crawl slowly...")
+    print(f"And the winner is... {winner}!")
+
+    if bet_amount > 0:
+        if bet_turtle == winner:
+            winnings = bet_amount * 2
+            wallet.copper += winnings
+            wallet.normalize()
+            print(f"You won {winnings} copper!")
+        else:
+            wallet.spend_copper(bet_amount)
+            print(f"You lost your bet of {bet_amount} copper.")
+    else:
+        print("You just enjoyed the race for fun!")
+
+
+
+def drink_with_kril(wallet, drunkenness):
+    DRINK_COST = 16  # double price, you're buying
+
+    if not wallet.can_afford(DRINK_COST):
+        print("\nKril eyes your purse and scoffs.")
+        print("‘Come back when you can pay for the fun.’")
         return
 
-    if drunkenness.drinks == 0:
-        print("Mercenaries brood in corners. A hooded figure watches you.")
+    print("\nYou slap coins on the table and clink mugs with Kril.")
+    wallet.spend_copper(DRINK_COST)
+
+    outcomes = [
+        ("She laughs and tells you a half-true tale of blood and storms.", "neutral"),
+        ("The ale burns hot. Kril howls with laughter as your head spins.", "bad"),
+        ("She leans close and mutters something valuable between gulps.", "good")
+    ]
+
+    result, outcome_type = random.choice(outcomes)
+    print(result)
+
+    drunkenness.add_drink()
+
+    if outcome_type == "good":
+        print("The drink leaves you strangely focused.")
+        # future hook: special rumor / item flag
+
+    elif outcome_type == "bad":
+        print("Your vision swims. You might regret another round.")
+        # future hook: blackout risk increases
+
+
+
+def play_rps_hafthor():
+    print("\nHafthor grins wide. ‘Two outta three.’")
+    print("Rock (r), Paper (p), Scissors (s). No tricks.")
+
+    choices = {"r": "Rock", "p": "Paper", "s": "Scissors"}
+    wins = 0
+    losses = 0
+
+    while wins < 2 and losses < 2:
+        player = input("\nYour throw (r/p/s): ").lower()
+        if player not in choices:
+            print("Hafthor snorts. ‘That ain’t a throw.’")
+            continue
+
+        hafthor = random.choice(list(choices.keys()))
+
+        print(f"You throw {choices[player]}.")
+        print(f"Hafthor throws {choices[hafthor]}.")
+
+        if player == hafthor:
+            print("A draw. He laughs.")
+        elif (
+            (player == "r" and hafthor == "s") or
+            (player == "p" and hafthor == "r") or
+            (player == "s" and hafthor == "p")
+        ):
+            wins += 1
+            print("You win the round.")
+        else:
+            losses += 1
+            print("Hafthor wins the round.")
+
+        print(f"Score — You: {wins} | Hafthor: {losses}")
+
+    if wins == 2:
+        print("\nHafthor roars with laughter.")
+        print("‘Ha! I like you. I’ll fight with you — once.’")
+        print("(Hafthor will join you for one battle.)")
+        return True
     else:
-        print("Everything feels warmer. Words blur into noise.")
+        print("\nHafthor spits on the floor.")
+        print("‘Come back when you’ve got hands.’")
+        return False
 
 
 # =====================================================
@@ -296,17 +576,44 @@ DICE_FLAVOR_TEXT = [
     "A man storms past clutching an empty purse.",
     "A knight laughs as coins jingle at his belt.",
     "A nervous youth stares at the dice.",
-    "A rougish half-man with a clean beard and a strange sheep at his side strolls past, you catch a smirk on their face.",
+    "A roguish half-man with a clean beard and a strange sheep at his side strolls past, you catch a smirk on their face.",
     "A strange muscular man with a boar mask pushes you to the side, laughing triumphantly.",
-    "A small child with a empty purse runs past you, tears splashing on the old wooden floor"
+    "A small child with an empty purse runs past you, tears splashing on the old wooden floor."
 ]
 
-HOUSE_BANTER = [
-    "‘Care to test your fortune?’",
-    "‘Easy money. For one of us.’",
-    "‘Dice don’t lie… usually.’",
-    "Thank the Gods, we could use the money- I mean, care for a game of chance?"
+HOUSE_INTRO = [
+    "The dealer rolls the dice slowly. ‘Care to test your fortune?’",
+    "The dealer eyes your purse. ‘Coin talks here.’",
+    "The dealer cracks his knuckles. ‘Easy money. For one of us.’",
+    "‘Thank the Gods,’ the dealer says. ‘Care for a game of chance?’"
 ]
+
+HOUSE_SILENT = [
+    "The dealer gathers the dice without a word.",
+    "The dealer watches you closely.",
+    "The dealer says nothing, only waiting."
+]
+
+CROWD_POSITIVE = [
+    "A low murmur ripples through the onlookers.",
+    "Someone whistles softly. ‘Lucky throw.’",
+    "You feel a few eyes settle on you.",
+    "A gambler mutters, ‘Beginner’s luck…’"
+]
+
+CROWD_NEGATIVE = [
+    "A drunk snorts. ‘That was ugly.’",
+    "Someone laughs. ‘House always wins.’",
+    "A voice mutters, ‘You should walk away.’",
+    "A gambler shakes their head in pity."
+]
+
+CROWD_BIG_WIN = [
+    "The table goes quiet.",
+    "Even the dealer pauses for a breath.",
+    "A few gamblers step back, watching carefully."
+]
+
 
 def roll_dice_of_debts():
     rolls = [random.randint(1, 6) for _ in range(DICE_COUNT)]
@@ -316,21 +623,23 @@ def roll_dice_of_debts():
 def dice_of_debts(wallet):
     print("\n--- Dice Corner ---")
     print(random.choice(DICE_FLAVOR_TEXT))
+    print(random.choice(HOUSE_INTRO))
 
     wager = 4
     raises = 0
+    wins = 0
+    losses = 0
 
     while True:
-        print(random.choice(HOUSE_BANTER))
-        print(f"The house wagers {wager} copper.")
+        print(f"\nThe wager is {wager} copper.")
         print(f"You have: {wallet.display()}")
 
         if not wallet.can_afford(wager):
-            print("You don’t have the coin.")
+            print("The dealer scoffs. ‘Come back with coin.’")
             return
 
         if input("Match? (y/n): ").lower() != "y":
-            print("You step away from the dice.")
+            print("You push back from the table.")
             return
 
         wallet.spend_copper(wager)
@@ -339,22 +648,30 @@ def dice_of_debts(wallet):
         print(f"Rolls: {rolls} → {total}")
 
         if total > DICE_WIN_THRESHOLD:
+            wins += 1
             print("You win.")
-            print(random.choice(DICE_WIN_RESPONSES))
             wallet.copper += wager * 2
             wallet.normalize()
+
+            if wins >= 2:
+                print(random.choice(CROWD_BIG_WIN))
+            else:
+                print(random.choice(CROWD_POSITIVE))
         else:
+            losses += 1
             print("You lose.")
-            print(random.choice(DICE_LOSE_RESPONSES))
+            print(random.choice(CROWD_NEGATIVE))
 
         print(f"Coin: {wallet.display()}")
 
         raises += 1
         if raises >= HOUSE_MAX_RAISES:
-            print("The house cuts you off.")
+            print("\nThe dealer gathers the dice.")
+            print("‘That’s enough for tonight.’")
             return
 
         wager += max(1, wager // 2)
+        print(random.choice(HOUSE_SILENT))
 
 # =====================================================
 # TAVERN CONTROLLER
@@ -371,13 +688,27 @@ def ask_barkeep(wallet, drunkenness):
     if choice == "1":
         ask_rumor(wallet, drunkenness)
     elif choice == "2":
-        look_around(drunkenness)
+        look_around(wallet, drunkenness)   
     elif choice == "3":
         game_of_wit(drunkenness)
     elif choice == "4":
         dice_of_debts(wallet)
+    elif choice == "5":
+        buy_drink(wallet, drunkenness)
 
     return True
+
+# =====================================================
+# TAVERN UI
+# =====================================================
+
+def tavern_ui(wallet, drunkenness):
+    print("\n" + "-" * 40)
+    print(" TAVERN")
+    print(f" Coin   : {wallet.display()}")
+    print(f" Drunk  : {drunkenness.display()}")
+    print(" Mood   : The air is thick with smoke and whispers.")
+    print("-" * 40)
 
 
 # =====================================================
@@ -389,10 +720,9 @@ def run_tavern():
     drunkenness = Drunkenness()
 
     print("You enter a smoke-filled tavern.")
-    print(f"Your coin: {wallet.display()}")
 
     while True:
-        print(f"\nStatus: {drunkenness.status()}")
+        tavern_ui(wallet, drunkenness)
         if not ask_barkeep(wallet, drunkenness):
             break
 

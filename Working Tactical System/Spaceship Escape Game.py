@@ -267,16 +267,17 @@ def draw_ui():
     print(f"Level: {current_level - 1}   Sector: {sector}")
     print("--------------------------------")
 
+    print("\n--- Actions ---")
     print("[1] Move Forward (1 AP)")
     print("[2] Turn Left    (1 AP)")
     print("[3] Turn Right   (1 AP)")
-
-    print("[4] Open Door    (1 AP)" if front_tile == "D" else "[4] Open Door    (Blocked)")
-
+    print("[4] Open Door    (1 AP)")
     print("[5] Melee Attack (1 AP, in front)")
-    print("[6] Ranged Attack (2 AP, range 3)")
-    print("[7] End Turn")
+    print("[6] Ranged Attack (2 AP, range depends on weapon)")
+    print("[7] Overwatch    (2 AP, attacks enemies moving into range)")
+    print("[8] End Turn")
     print("[Q] Quit")
+
 
     print("\nMAP LEGEND")
     print("#########")
@@ -443,55 +444,57 @@ def flame_attack():
         message_log.append("Flamer hits nothing.")
     player_ap -= FLAME_COST
 
-def overwatch_attack(player, enemy_positions, game_map):
-    """Check all enemies for entering overwatch zone"""
-    if not player.get("overwatch"):
-        return
-
-    px, py = player['pos']
-    facing = player['facing']
-
-    # directions to check (3 forward + diagonals)
-    if facing == "N":
-        tiles = [(px, py-1), (px-1, py-1), (px+1, py-1)]
-    elif facing == "S":
-        tiles = [(px, py+1), (px-1, py+1), (px+1, py+1)]
-    elif facing == "E":
-        tiles = [(px+1, py), (px+1, py-1), (px+1, py+1)]
-    elif facing == "W":
-        tiles = [(px-1, py), (px-1, py-1), (px-1, py+1)]
-
-    # check for enemies in tiles
-    for enemy in enemy_positions:
-        ex, ey = enemy['pos']
-        if (ex, ey) in tiles:
-            print(f"Overwatch! {enemy['name']} is fired upon!")
-            enemy['hp'] -= player.get('range', 1)  # damage formula
-            if enemy['hp'] <= 0:
-                print(f"{enemy['name']} is destroyed!")
-                enemy_positions.remove(enemy)
-
-
+# ==========================================
+# PLAYER STATE
+# ==========================================
+player_overwatch = False  # Tracks if player is on overwatch this turn
+player_weapon = "default"  # For weapon attack patterns
+WEAPON_ATTACK_PATTERNS = {
+    "default": {
+        "N": [(0, -1), (-1, -1), (1, -1)],
+        "S": [(0, 1), (-1, 1), (1, 1)],
+        "E": [(1, 0), (1, -1), (1, 1)],
+        "W": [(-1, 0), (-1, -1), (-1, 1)]
+    }
+}
 
 # ==========================================
 # GENESTEALER AI
 # ==========================================
 
-GENESTEALER_AP = 3  # How many actions per Genestealer per turn
+GENESTEALER_AP = 3  # Actions per Genestealer per turn
+
+def is_in_overwatch(gx, gy):
+    """Check if a Genestealer is in player's overwatch zone."""
+    pattern = WEAPON_ATTACK_PATTERNS[player_weapon][player_facing]
+    for ox, oy in pattern:
+        if (player_x + ox, player_y + oy) == (gx, gy):
+            return True
+    return False
+
+def damage_genestealer(g):
+    """Remove or damage Genestealer."""
+    if "hp" not in g:
+        g["hp"] = 1
+    g["hp"] -= 1
+    if g["hp"] <= 0:
+        genestealers.remove(g)
+        message_log.append(f"Genestealer at ({g['x']},{g['y']}) destroyed by overwatch!")
 
 def genestealer_turn():
-    global player_alive
+    global player_alive, player_overwatch
 
     for g in genestealers:
         g_ap = GENESTEALER_AP
         while g_ap > 0 and player_alive:
+
             dx = player_x - g["x"]
             dy = player_y - g["y"]
 
             step_x = 0 if dx == 0 else int(dx / abs(dx))
             step_y = 0 if dy == 0 else int(dy / abs(dy))
 
-            # Prefer axis with longer distance, but randomize 20% to avoid zig-zag
+            # Determine next step (prefer axis with longer distance)
             if abs(dx) > abs(dy):
                 if random.random() < 0.8:
                     nx, ny = g["x"] + step_x, g["y"]
@@ -503,45 +506,78 @@ def genestealer_turn():
                 else:
                     nx, ny = g["x"] + step_x, g["y"]
 
-            target_tile = map_data[ny][nx]
+            # -------------------------
+            # Check Player Overwatch
+            # -------------------------
+            if player_overwatch and is_in_overwatch(g["x"], g["y"]):
+                message_log.append(f"Overwatch! Genestealer at ({g['x']}, {g['y']}) fired upon!")
+                damage_genestealer(g)
+                g_ap = 0
+                break  # stop this Genestealer's turn if hit
 
-            # Check for walls
-            if target_tile == "#":
-                message_log.append("A Genestealer bumps into a wall.")
-                g_ap = 0  # Ends this Genestealer's turn
-                break
+            # -------------------------
+            # Check Map Tile
+            # -------------------------
+            if map_data[ny][nx] == "#":
+                # Try moving along the other axis if blocked
+                alt_nx, alt_ny = g["x"], g["y"]
+                if nx != g["x"]: alt_nx = g["x"]
+                if ny != g["y"]: alt_ny = g["y"]
+                if map_data[alt_ny][alt_nx] == "#":
+                    message_log.append("A Genestealer bumps into a wall.")
+                    g_ap = 0
+                    break
+                else:
+                    nx, ny = alt_nx, alt_ny
 
-            # Check for closed door
-            elif target_tile == "D":
+            elif map_data[ny][nx] == "D":
                 map_data[ny][nx] = "O"
                 message_log.append("A Genestealer opens a door.")
                 g_ap -= 1
                 continue
 
-            # Check for player
             elif (nx, ny) == (player_x, player_y):
                 message_log.append("A Genestealer attacks you!")
                 player_alive = False
                 g_ap = 0
                 break
 
-            # Check for another Genestealer
             elif any(other["x"] == nx and other["y"] == ny for other in genestealers if other != g):
                 message_log.append("A Genestealer waits for space to move.")
                 g_ap = 0
                 break
 
-            # Otherwise, move
+            # -------------------------
+            # Move Genestealer
+            # -------------------------
             else:
                 old_x, old_y = g["x"], g["y"]
                 g["x"], g["y"] = nx, ny
+
                 move_dir = ""
                 if nx > old_x: move_dir = "east"
                 elif nx < old_x: move_dir = "west"
                 elif ny > old_y: move_dir = "south"
                 elif ny < old_y: move_dir = "north"
+
                 message_log.append(f"Genestealer moves {move_dir}.")
                 g_ap -= 1
+
+    # Reset overwatch after all Genestealers finish their turn
+    player_overwatch = False
+
+# ==========================================
+# PLAYER ACTION: Overwatch
+# ==========================================
+
+def player_overwatch_action():
+    global player_ap, player_overwatch
+    if player_ap >= 2:
+        player_ap -= 2
+        player_overwatch = True
+        message_log.append("Overwatch ready! Any enemy moving into range will be fired upon.")
+    else:
+        message_log.append("Not enough AP for Overwatch!")
 
 # ==========================================
 # GAME LOOP
